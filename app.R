@@ -109,6 +109,34 @@ ui <- fluidPage(
 										a("Community Mobility Reports", href="https://www.google.com/covid19/mobility/")
 									))
 			)
+		),
+		
+		#---------------------------------------------------------------------------
+		# plot traffic volume
+		tabPanel("Traffic Volume", fluid=TRUE,
+						 sidebarLayout(
+						 	sidebarPanel(
+						 		titlePanel(""),
+						 		fluidRow(
+						 			dateInput("traf_date",
+						 								label = "Display change in traffic volume on:",
+						 								value = Sys.Date()-3,
+						 								min = "2020-03-01",
+						 								max = Sys.Date()-3
+						 			)
+						 		)
+						 	),
+						 	mainPanel(plotOutput("traf"),
+						 						br(),
+						 						br(),
+						 						br(),
+						 						br(),
+						 						br(),
+						 						br(),
+						 						p("Data are from",
+						 							a("MS2's Traffic Dashborad", href="https://www.ms2soft.com/traffic-dashboard/")
+						 						))
+						 )
 		)
 	)
 )
@@ -160,6 +188,13 @@ server <- function(input, output){
 			data <- merge(coord.cnty, moby.cnty[date==day], by="id", all.x=TRUE)
 		}
 		plot_moby(var, data, coord.state)
+	}, height = 500, width = 800)
+	
+	#-----------------------------------------------------------------------------
+	# plot traffic volume 
+	output$traf <- renderPlot({
+		data <- merge(coord.state, traf.state[date==input$traf_date], by="state", all.x=TRUE)
+		plot_traf(data, coord.state)
 	}, height = 500, width = 800)
 }
 
