@@ -6,3 +6,5 @@ The interface looks below.
 <img src="fig/sample_cases.png" width="75%" height="75%">
 
 <img src="fig/sample_mobility.png" width="75%" height="75%">
+
+<img src="fig/sample_traffic.png" width="75%" height="75%">
