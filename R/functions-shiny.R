@@ -53,23 +53,23 @@ plot_traf <- function(data, coord.state){
 }
 
 # Analysis
-plot_traf_case <- function(){
-	case.state[state %in% unique(coord.state$state), sum(cases), by=date]
-	dt.fig <- merge(dt.fig, dt.cases, by = "date", all.x = TRUE)
-	fig2 <- ggplot(dt.fig, aes(x = date)) +
+plot_traf_case <- function(data){
+	ggplot(data, aes(x = date)) +
 		geom_line(aes(y = case_growth, color = "Case growth")) +
-		geom_line(aes(y = ave_traffic * 1 + 50, color = "traffic decline")) +
+		geom_line(aes(y = traf * 1 + 50, color = "traffic decline")) +
 		scale_y_continuous(
 			breaks = seq(0, 50, 10),
 			sec.axis = sec_axis( ~ . / 1 - 50, name = "Traffic decline (%)")
 		) +
 		scale_x_date(breaks = "1 week") +
 		labs(
-			title = "Decline in Traffic Volume and COVID-19 Case Growth",
 			y = "Case growth (%)",
 			x = "",
 			color = ""
 		) + theme_classic() +
-		theme(legend.position = c(0.8, 0.8)) + scale_color_manual(values = c("blue", "red"))
-	
+		theme(legend.position = c(0.8, 0.8), 
+					legend.title=element_text(size=16,family="Times New Roman"),
+					legend.text=element_text(size=14,vjust=0.5,family="Times New Roman"),
+					axis.text.x=element_text(size=14,family="Times New Roman",angle=45,hjust=1)) + 
+		scale_color_manual(values = c("blue", "red"))
 }

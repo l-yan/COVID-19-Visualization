@@ -30,8 +30,7 @@ Data_Process <- function(){
 	case.state[, ln_cases_d7 := 100*(ln_cases-shift(ln_cases, 7, 0, "lead")), by=state]
 	case.state[, ln_cases_d14 :=100*(ln_cases-shift(ln_cases,14, 0, "lead")), by=state]
 	case.state[, ln_cases_d30 :=100*(ln_cases-shift(ln_cases,30, 0, "lead")), by=state]
-	case.state <- case.state[date==max(date)]
-	
+
 	# COVID-19 cases by county
 	case.cnty <- fread("data/case_county.csv")[, !c('V1', 'deaths'), with=FALSE]
 	case.cnty <- case.cnty[!is.na(fips)] # some cases have no fips
@@ -42,8 +41,7 @@ Data_Process <- function(){
 	case.cnty[, ln_cases_d7 := 100*(ln_cases-shift(ln_cases, 7, 0, "lead")), by=fips]
 	case.cnty[, ln_cases_d14 :=100*(ln_cases-shift(ln_cases,14, 0, "lead")), by=fips]
 	case.cnty[, ln_cases_d30 :=100*(ln_cases-shift(ln_cases,30, 0, "lead")), by=fips]
-	case.cnty <- case.cnty[date==max(date)]
-	
+
 	# Google mobility
 	moby <- fread("data/moby.csv")
 	moby[, date := as.Date(date)]
@@ -119,5 +117,14 @@ log1 <- function(x){
 	y <- log(x)
 	y[!is.finite(y)] <- 0
 	return(y)
+}
+
+# remove day of week effects
+RemoveDayOfWeek <- function(x, date){
+	D <- matrix(0, length(date), 7)
+	for (i in 1:7){
+		D[wday(date)==i, i] <- 1
+	}
+	return(residuals(lm(x ~ D - 1)))
 }
 

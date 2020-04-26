@@ -132,6 +132,13 @@ ui <- fluidPage(
 						 						br(),
 						 						br(),
 						 						br(),
+						 						br(),br(),br(),
+						 						plotOutput("traf_case"),
+						 						br(),
+						 						br(),
+						 						br(),
+						 						br(),
+						 						br(),
 						 						br(),
 						 						p("Data are from",
 						 							a("MS2's Traffic Dashborad", href="https://www.ms2soft.com/traffic-dashboard/")
@@ -195,6 +202,16 @@ server <- function(input, output){
 	output$traf <- renderPlot({
 		data <- merge(coord.state, traf.state[date==input$traf_date], by="state", all.x=TRUE)
 		plot_traf(data, coord.state)
+	}, height = 500, width = 800)
+	
+	#-----------------------------------------------------------------------------
+	# plot case growth versus change in traffic volume
+	case.sum <- case.state[state %in% unique(coord.state$state), sum(cases), keyby=date]
+	case.sum[, case_growth := c(NA, 100*diff(log(V1)))]
+	case.sum[, date := as.Date(date)]
+	data <- merge(traf.state[state=="National"], case.sum, by = "date", all.x = TRUE)
+	output$traf_case <- renderPlot({
+		plot_traf_case(data)
 	}, height = 500, width = 800)
 }
 
