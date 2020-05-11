@@ -4,72 +4,94 @@
 
 # plot COVID-19 cases
 plot_case <- function(var, data, coord.state){
-	q <- quantile(data[, get(var)], seq(0.2, 0.8, 0.2), na.rm = TRUE)
-	name <- "Percent"
-	if (var=="cases"){name<-""}
+	q <- AppQuantile(data[, unique(get(var))], seq(0.2, 0.8, 0.2))
 	ggplot(data, aes(x, y, group = group)) +
-		geom_polygon(aes(fill = findInterval(get(var), q))) +
+		{if ("county" %in% names(data) == T) geom_polygon(aes(fill = findInterval(get(var), q)))} +
+		{if ("county" %in% names(data) == F) geom_polygon_interactive(aes(fill = findInterval(get(var), q), tooltip = sprintf(c("%s<br>%1.0f"), state, get(var))))} +
 		geom_polygon(data=coord.state, fill = NA, color = "black") +
-		scale_fill_distiller(palette="Reds", direction=1, name=name, na.value="white", labels=RenameLabels(q,0)) +
-		ggthemes::theme_map() + 
-		theme(legend.position="right", legend.title=element_text(size=16,family="Times New Roman"),
-					legend.text=element_text(size=12,vjust=0.5,family="Times New Roman"))
+		scale_fill_distiller(palette="Reds", direction=1, name="", na.value="white", labels=RenameLabels(q,0)) +
+		ggtitle(paste("Changes in COVID-19 ", unlist(strsplit(var, split = "_"))[1], " since ", sub('.*(?=.$)', '', var, perl=T), " week(s) ago", sep = "")) +
+		ggthemes::theme_map() + my_theme
 }
 
-
 # plot google mobility
-plot_moby <- function(var, data, coord.state){
-	q <- quantile(data[, get(var)], seq(0.2, 0.8, 0.2), na.rm = TRUE)
-	direction <- -1
-	pal <- "RdYlBu"
-	if (max(q)<0){
-		direction <- -1
-		pal <- "Blues"
-	}
-	if (min(q)>0){
-		direction <- 1
-		pal <- "Reds"
-	}
+plot_moby <- function(moby_type, data, coord.state){
+	var <- switch(moby_type,
+								"Grocery and Pharmacy" = "grocery",
+								"Parks" = "parks",
+								"Residential" = "residential",
+								"Retail and Recreation" = "retail",
+								"Transit" = "transit",
+								"Workplaces" = "workplaces")
+	q <- quantile(data[, unique(get(var))], seq(0.2, 0.8, 0.2), na.rm = TRUE)
+	direction <- sign(min(data[, get(var)], na.rm=T))
+	pals <- c("Blues", "RdYlBu", "Reds")
+	pals.i <- sign(sum(sign(c(min(data[, get(var)], na.rm=T), max(data[, get(var)], na.rm=T))))) + 2
 	ggplot(data, aes(x, y, group = group)) +
-		geom_polygon(aes(fill = findInterval(get(var), q))) +
+		{if ("county" %in% names(data) == T) geom_polygon(aes(fill = findInterval(get(var), q)))} +
+		{if ("county" %in% names(data) == F) geom_polygon_interactive(aes(fill = findInterval(get(var), q), tooltip = sprintf(c("%s<br>%1.1f%%"), state, get(var))))} +
 		geom_polygon(data=coord.state, fill = NA, color = "black") +
-		scale_fill_distiller(palette=pal, direction=direction, name="Percent", na.value="white", labels=RenameLabels(q,0)) +
-		ggthemes::theme_map() + 
-		theme(legend.position="right", legend.title=element_text(size=16,family="Times New Roman"),
-					legend.text=element_text(size=12,vjust=0.5,family="Times New Roman"))
+		scale_fill_distiller(palette=pals[pals.i], direction=direction, name="", na.value="white", labels=RenameLabels(q, 0, TRUE)) +
+		ggtitle(paste("Changes in mobility in ", moby_type, " on ", unique(data$date), sep = "")) +
+		ggthemes::theme_map() + my_theme
+}
+
+# plot DL mobility
+plot_moby_dl <- function(moby_dl_type, data, coord.state){
+	var <- switch(moby_dl_type,
+								"median max-distance mobility" = "m50",
+								"change in median max-distance mobility" = "m50_index")
+	q <- quantile(data[, unique(get(var))], seq(0.2, 0.8, 0.2), na.rm = TRUE)
+	ggplot(data, aes(x, y, group = group)) +
+		{if ("county" %in% names(data) == T) geom_polygon(aes(fill = findInterval(get(var), q)))} +
+		{if ("county" %in% names(data) == F) geom_polygon_interactive(aes(fill = findInterval(get(var), q), tooltip = sprintf(c("%s<br>%1.1f"), state, get(var))))} +
+		geom_polygon(data=coord.state, fill = NA, color = "black") +
+		scale_fill_distiller(palette="Reds", direction=1, name="", na.value="white", labels=RenameLabels(q, 0)) +
+		ggtitle(paste("Max-distance mobility on ", unique(data$date), sep = "")) +
+		ggthemes::theme_map() + my_theme
 }
 
 # plot traffic volume
-plot_traf <- function(data, coord.state){
-	q <- seq(-50, 10, 10)
-	data[, fills := findInterval(traf, q)]
-	ggplot(data, aes(x, y, group = group)) +
-		geom_polygon(aes(fill = fills)) +
-		geom_polygon(data=coord.state, fill = NA, color = "black") +
-		scale_fill_distiller(palette="Blues", direction=-1, name="%", na.value="white", labels=RenameLabels(q,0)[sort(unique(data$fills))+1]) +
-		ggthemes::theme_map() + 
-		theme(legend.position="right", legend.title=element_text(size=16,family="Times New Roman"),
-					legend.text=element_text(size=12,vjust=0.5,family="Times New Roman"))
-}
-
-# Analysis
-plot_traf_case <- function(data){
+plot_traf <- function(data){
 	ggplot(data, aes(x = date)) +
-		geom_line(aes(y = case_growth, color = "Case growth")) +
-		geom_line(aes(y = traf * 1 + 50, color = "traffic decline")) +
+		geom_line(aes(y = case_growth, color = "Case growth (%)"), size=1) +
+		geom_line(aes(y = traf * 1 + 50, color = "Traffic decline (%)"), size=1) +
 		scale_y_continuous(
-			breaks = seq(0, 50, 10),
 			sec.axis = sec_axis( ~ . / 1 - 50, name = "Traffic decline (%)")
 		) +
 		scale_x_date(breaks = "1 week") +
-		labs(
-			y = "Case growth (%)",
-			x = "",
-			color = ""
-		) + theme_classic() +
-		theme(legend.position = c(0.8, 0.8), 
-					legend.title=element_text(size=16,family="Times New Roman"),
-					legend.text=element_text(size=14,vjust=0.5,family="Times New Roman"),
-					axis.text.x=element_text(size=14,family="Times New Roman",angle=45,hjust=1)) + 
-		scale_color_manual(values = c("blue", "red"))
+		labs(y = "Case growth (%)", x = "", color = "") + 
+		scale_color_manual(values = c("blue", "red")) +
+		theme_classic() +		
+		ggtitle(paste("Changes in traffic volume and growth of cases: ", unique(data$state), sep = "")) +
+		theme(plot.title = element_text(size = 18, hjust = 0.5, family = "Times"), 
+					legend.position = c(0.8, 0.8), 
+					legend.title=element_text(size=14,family="Times"),
+					legend.text=element_text(size=14,vjust=0.5,family="Times"),
+					axis.text.x=element_text(size=14,family="Times",angle=45,hjust=1),
+					axis.text.y=element_text(size=14,family="Times",hjust=1),
+					axis.title=element_text(size=14,family="Times")) 
 }
+
+# plot Apple mobility
+plot_moby_appl <- function(data){
+	ggplot(data, aes(x = date)) +
+		geom_line(aes(y = case_growth, color = "Case growth (%)"), size=1) +
+		geom_line(aes(y = traf * 1 - 50, color = "Traffic decline (%)"), size=1) +
+		scale_y_continuous(
+			sec.axis = sec_axis( ~ . / 1 + 50, name = "Traffic decline (%)")
+		) +
+		scale_x_date(breaks = "1 week") +
+		labs(y = "Case growth (%)", x = "", color = "") + 
+		scale_color_manual(values = c("blue", "red")) +
+		theme_classic() +		
+		ggtitle(paste("Changes in traffic volume and growth of cases: ", unique(data$transportation_type), sep = "")) +
+		theme(plot.title = element_text(size = 18, hjust = 0.5, family = "Times"), 
+					legend.position = c(0.8, 0.8), 
+					legend.title=element_text(size=14,family="Times"),
+					legend.text=element_text(size=14,vjust=0.5,family="Times"),
+					axis.text.x=element_text(size=14,family="Times",angle=45,hjust=1),
+					axis.text.y=element_text(size=14,family="Times",hjust=1),
+					axis.title=element_text(size=14,family="Times")) 
+}
+

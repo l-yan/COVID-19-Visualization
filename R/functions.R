@@ -1,20 +1,45 @@
 # ------------------------------------------------------------------------------
-# This file contains functions used to help data processing
+# This file contains helper functions 
 # ------------------------------------------------------------------------------
 
 # download online data and save them in folder 'data'
-Data_Download <- function(){
-	require(data.table)
-	# US COVID-19 case data from nytimes (https://github.com/nytimes/covid-19-data)
-	# nytimes updates this data every day
-	dat <- fread("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-states.csv")
-	write.csv(dat, file = "data/case_state.csv")
-	dat <- fread("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv")
-	write.csv(dat, file = "data/case_county.csv")
+Data_Update <- function(){
 	
-	# Google mobility report (updated every Sunday)
-	dat <- fread("https://www.gstatic.com/covid19/mobility/Global_Mobility_Report.csv")
-	write.csv(dat, file = "data/moby.csv")
+	# US COVID-19 data from New York Times
+	# by state
+	if (as.Date(file.info("data/case_state.csv")$ctime) < Sys.Date()){
+		write.csv(x = fread("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-states.csv", showProgress = FALSE), 
+							file = "data/case_state.csv")
+		print("COVID-19 cases by state have been successfully updated!")
+	}else{
+		print("COVID-19 cases by state are up to date!")
+	}
+	# by county
+	if (as.Date(file.info("data/case_county.csv")$mtime) < Sys.Date()){
+		write.csv(x = fread("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv", showProgress = FALSE), 
+							file = "data/case_county.csv")
+		print("COVID-19 cases by county have been successfully updated!")
+	}else{
+		print("COVID-19 cases by county are up to date!")
+	}
+	
+	# Mobility reports from Google
+	if (as.Date(file.info("data/moby_goog.csv")$mtime) < Sys.Date()){
+		write.csv(x = fread("https://www.gstatic.com/covid19/mobility/Global_Mobility_Report.csv", showProgress = FALSE), 
+							file = "data/moby_goog.csv")
+		print("Mobility reports from Google have been successfully updated!")
+	}else{
+		print("Mobility reports from Google are up to date!")
+	}
+	
+	# Mobility reports from Descartes Labs
+	if (as.Date(file.info("data/moby_dl.csv")$mtime) < Sys.Date()){
+		write.csv(x = fread("https://raw.githubusercontent.com/descarteslabs/DL-COVID-19/master/DL-us-mobility-daterow.csv", showProgress = FALSE), 
+							file = "data/moby_dl.csv")
+		print("Mobility reports from Descartes Labs have been successfully updated!")
+	}else{
+		print("Mobility reports from Descartes Labs are up to date!")
+	}
 	
 }
 
@@ -24,26 +49,22 @@ Data_Process <- function(){
 	# COVID-19 cases by state
 	case.state <- fread("data/case_state.csv")[, !c('V1', 'fips'), with=FALSE]
 	setorder(case.state, state, -date)
-	case.state[, ln_cases := pmax(0, log(cases))] # log(0) = 0
-	case.state[, ln_cases_d1 := 100*(ln_cases-shift(ln_cases, 1, 0, "lead")), by=state]
-	case.state[, ln_cases_d3 := 100*(ln_cases-shift(ln_cases, 3, 0, "lead")), by=state]
-	case.state[, ln_cases_d7 := 100*(ln_cases-shift(ln_cases, 7, 0, "lead")), by=state]
-	case.state[, ln_cases_d14 :=100*(ln_cases-shift(ln_cases,14, 0, "lead")), by=state]
-	case.state[, ln_cases_d30 :=100*(ln_cases-shift(ln_cases,30, 0, "lead")), by=state]
-
+	for (i in 1:4){
+		case.state[, paste("cases_w", i, sep = "") := cases - shift(cases, i*7, NA, "lead"), by = state]
+		case.state[, paste("deaths_w", i, sep = "") := deaths - shift(deaths, i*7, NA, "lead"), by = state]
+	}
+	
 	# COVID-19 cases by county
-	case.cnty <- fread("data/case_county.csv")[, !c('V1', 'deaths'), with=FALSE]
+	case.cnty <- fread("data/case_county.csv")[, !c('V1'), with=FALSE]
 	case.cnty <- case.cnty[!is.na(fips)] # some cases have no fips
 	setorder(case.cnty, fips, -date)
-	case.cnty[, ln_cases := log(cases)]
-	case.cnty[, ln_cases_d1 := 100*(ln_cases-shift(ln_cases, 1, 0, "lead")), by=fips]
-	case.cnty[, ln_cases_d3 := 100*(ln_cases-shift(ln_cases, 3, 0, "lead")), by=fips]
-	case.cnty[, ln_cases_d7 := 100*(ln_cases-shift(ln_cases, 7, 0, "lead")), by=fips]
-	case.cnty[, ln_cases_d14 :=100*(ln_cases-shift(ln_cases,14, 0, "lead")), by=fips]
-	case.cnty[, ln_cases_d30 :=100*(ln_cases-shift(ln_cases,30, 0, "lead")), by=fips]
-
+	for (i in 1:4){
+		case.cnty[, paste("cases_w", i, sep = "") := cases - shift(cases, i*7, NA, "lead"), by = fips]
+		case.cnty[, paste("deaths_w", i, sep = "") := deaths - shift(deaths, i*7, NA, "lead"), by = fips]
+	}
+	
 	# Google mobility
-	moby <- fread("data/moby.csv")
+	moby <- fread("data/moby_goog.csv")
 	moby[, date := as.Date(date)]
 	setnames(moby, c("V1", "country_code", "country_name", "state", "county", "date",
 									 "retail", "grocery", "parks", "transit", "workplaces", "residential"))
@@ -56,7 +77,13 @@ Data_Process <- function(){
 	moby.cnty[county=="Doña Ana County", county := "Dona Ana County"]
 	moby.cnty[county=="Shannon County" & state=="South Dakota", county := "Oglala Lakota County"]
 	moby.cnty[, id := tolower(paste(state, county, sep = ","))]
-
+	
+	# Descartes Labs mobility
+	moby.dl <- fread("data/moby_dl.csv")
+	moby.dl[, date := as.Date(date)]
+	moby.dl <- moby.dl[, c(1, 4:9)]
+	setnames(moby.dl, old = c("admin1", "admin2"), new = c("state", "county"))
+	
 	# US state coordinates
 	coord.state <- data.table(us_map("state"))
 	setnames(coord.state, "full", "state")
@@ -88,6 +115,12 @@ Data_Process <- function(){
 	traf.state$state <- tmp$full[match(traf.state$state, tmp$abbr)]
 	traf.state[is.na(state), state := "National"]
 
+	# Apple mobility
+	moby.appl <- fread("data/moby_appl.csv")
+	moby.appl <- melt(moby.appl, measure.vars = 5:ncol(moby.appl), variable.name = "date", value.name = "traf")
+	moby.appl[, date := as.Date(date)]
+	moby.appl <- moby.appl[region == "United States"]
+	
 	# exports
 	out <- list(case.state = case.state, 
 							case.cnty = case.cnty, 
@@ -95,13 +128,16 @@ Data_Process <- function(){
 							moby.cnty = moby.cnty, 
 							coord.state = coord.state, 
 							coord.cnty = coord.cnty,
-							traf.state = traf.state)
+							traf.state = traf.state,
+							moby.appl = moby.appl,
+							moby.dl = moby.dl)
 	return(out)
 }
 
 # generate legend labels 
-RenameLabels <- function(q, digits){
-	q <- formatC(round(q, digits))
+RenameLabels <- function(q, digits, percent=FALSE){
+	q <- formatC(q, digits = digits, format = "f")
+	if (percent == TRUE) q <- paste(q, "%", sep = "")
 	n <- length(q)
 	labels <- array(NA, length(q) + 1)
 	labels[1] <- paste("\u2264 ", q[1], sep = "")
@@ -112,13 +148,6 @@ RenameLabels <- function(q, digits){
 	return(labels)
 }
 
-# log zero
-log1 <- function(x){
-	y <- log(x)
-	y[!is.finite(y)] <- 0
-	return(y)
-}
-
 # remove day of week effects
 RemoveDayOfWeek <- function(x, date){
 	D <- matrix(0, length(date), 7)
@@ -127,4 +156,13 @@ RemoveDayOfWeek <- function(x, date){
 	}
 	return(residuals(lm(x ~ D - 1)))
 }
+
+# Approximate quantile
+AppQuantile <- function(x, q){
+	x <- quantile(x, q, na.rm = TRUE)
+	y <- round(x/10^floor(log10(abs(x))))*10^floor(log10(abs(x)))
+	y[is.na(y)] <- 0
+	return(y)
+}
+
 
