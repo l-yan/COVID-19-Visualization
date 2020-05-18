@@ -1,97 +1,98 @@
-# ------------------------------------------------------------------------------
-# This file contains functions used to produce shiny outputs
-# ------------------------------------------------------------------------------
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# This file contains shiny output functions
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-# plot COVID-19 cases
-plot_case <- function(var, data, coord.state){
+#-------------------------------------------------------------------------------
+# Plot COVID-19 data
+#-----------------------------------------------------------------------------
+plot_case <- function(coord, case, v1, v2, v3, v4, v5){
+	var <- paste(v2, v3, v5, sep = "")
+	data <- merge(coord, case[county %in% "State" == v1 & date == v4], by = "fips", all.x = TRUE)[!is.na(county)]
 	q <- AppQuantile(data[, unique(get(var))], seq(0.2, 0.8, 0.2))
 	ggplot(data, aes(x, y, group = group)) +
-		{if ("county" %in% names(data) == T) geom_polygon(aes(fill = findInterval(get(var), q)))} +
-		{if ("county" %in% names(data) == F) geom_polygon_interactive(aes(fill = findInterval(get(var), q), tooltip = sprintf(c("%s<br>%1.0f"), state, get(var))))} +
-		geom_polygon(data=coord.state, fill = NA, color = "black") +
-		scale_fill_distiller(palette="Reds", direction=1, name="", na.value="white", labels=RenameLabels(q,0)) +
-		ggtitle(paste("Changes in COVID-19 ", unlist(strsplit(var, split = "_"))[1], " since ", sub('.*(?=.$)', '', var, perl=T), " week(s) ago", sep = "")) +
-		ggthemes::theme_map() + my_theme
+		{if (v1 == FALSE) geom_polygon(aes(fill = findInterval(get(var), q)))} +
+		{if (v1 == TRUE) geom_polygon_interactive(aes(fill = findInterval(get(var), q), tooltip = sprintf(c("%s<br>%1.0f"), state, get(var))))} +
+		geom_polygon(data=coord[fips < 1001], fill = NA, color = "black") +
+		scale_fill_distiller(palette="RdYlBu", direction=-1, name="", na.value="white", labels=RenameLabels(q,0)) +
+		ggtitle(GenerateCaseTitle(v1, v2, v3, v4, v5)) +
+		ggthemes::theme_map() + my_theme()
 }
 
-# plot google mobility
-plot_moby <- function(moby_type, data, coord.state){
-	var <- switch(moby_type,
-								"Grocery and Pharmacy" = "grocery",
-								"Parks" = "parks",
-								"Residential" = "residential",
-								"Retail and Recreation" = "retail",
-								"Transit" = "transit",
-								"Workplaces" = "workplaces")
-	q <- quantile(data[, unique(get(var))], seq(0.2, 0.8, 0.2), na.rm = TRUE)
-	direction <- sign(min(data[, get(var)], na.rm=T))
-	pals <- c("Blues", "RdYlBu", "Reds")
-	pals.i <- sign(sum(sign(c(min(data[, get(var)], na.rm=T), max(data[, get(var)], na.rm=T))))) + 2
-	ggplot(data, aes(x, y, group = group)) +
-		{if ("county" %in% names(data) == T) geom_polygon(aes(fill = findInterval(get(var), q)))} +
-		{if ("county" %in% names(data) == F) geom_polygon_interactive(aes(fill = findInterval(get(var), q), tooltip = sprintf(c("%s<br>%1.1f%%"), state, get(var))))} +
-		geom_polygon(data=coord.state, fill = NA, color = "black") +
-		scale_fill_distiller(palette=pals[pals.i], direction=direction, name="", na.value="white", labels=RenameLabels(q, 0, TRUE)) +
-		ggtitle(paste("Changes in mobility in ", moby_type, " on ", unique(data$date), sep = "")) +
-		ggthemes::theme_map() + my_theme
-}
-
-# plot DL mobility
-plot_moby_dl <- function(moby_dl_type, data, coord.state){
-	var <- switch(moby_dl_type,
-								"median max-distance mobility" = "m50",
-								"change in median max-distance mobility" = "m50_index")
+#-----------------------------------------------------------------------------
+# Plot Google mobility
+#-----------------------------------------------------------------------------
+plot_moby_goog <- function(coord, moby.goog, v1, v2, v3, v4){
+	var <- paste(switch(v2, "Grocery and Pharmacy" = "grocery",
+													"Parks" = "parks",
+													"Residential" = "residential",
+													"Retail and Recreation" = "retail",
+													"Transit" = "transit",
+													"Workplaces" = "workplaces"), v3, sep = "")
+	data <- merge(coord, moby.goog[county %in% "State" == v1 & date == v4], by = "id", all.x = TRUE)[!is.na(county)]
 	q <- quantile(data[, unique(get(var))], seq(0.2, 0.8, 0.2), na.rm = TRUE)
 	ggplot(data, aes(x, y, group = group)) +
-		{if ("county" %in% names(data) == T) geom_polygon(aes(fill = findInterval(get(var), q)))} +
-		{if ("county" %in% names(data) == F) geom_polygon_interactive(aes(fill = findInterval(get(var), q), tooltip = sprintf(c("%s<br>%1.1f"), state, get(var))))} +
-		geom_polygon(data=coord.state, fill = NA, color = "black") +
-		scale_fill_distiller(palette="Reds", direction=1, name="", na.value="white", labels=RenameLabels(q, 0)) +
-		ggtitle(paste("Max-distance mobility on ", unique(data$date), sep = "")) +
-		ggthemes::theme_map() + my_theme
+		{if (v1 == FALSE) geom_polygon(aes(fill = findInterval(get(var), q)))} +
+		{if (v1 == TRUE) geom_polygon_interactive(aes(fill = findInterval(get(var), q), tooltip = sprintf(c("%s<br>%1.1f%%"), state, get(var))))} +
+		geom_polygon(data=coord[fips < 1001], fill = NA, color = "black") +
+		scale_fill_distiller(palette="RdYlBu", direction=-1, name="", na.value="white", labels=RenameLabels(q, 0, TRUE)) +
+		ggtitle(GenerateGoogTitle(v1, v2, v3, v4)) +
+		ggthemes::theme_map() + my_theme()
 }
 
-# plot traffic volume
-plot_traf <- function(data){
-	ggplot(data, aes(x = date)) +
-		geom_line(aes(y = case_growth, color = "Case growth (%)"), size=1) +
-		geom_line(aes(y = traf * 1 + 50, color = "Traffic decline (%)"), size=1) +
-		scale_y_continuous(
-			sec.axis = sec_axis( ~ . / 1 - 50, name = "Traffic decline (%)")
-		) +
+#-----------------------------------------------------------------------------
+# Plot DL mobility
+#-----------------------------------------------------------------------------
+plot_moby_dl <- function(coord, moby.dl, v1, v2, v3){
+	var <- v2
+	formats <- ifelse(v2 == "m50", c("%s<br>%1.1f"), c("%s<br>%1.0f%%"))
+	data <- merge(coord, moby.dl[county %in% "State" == v1 & date == v3], by = "fips", all.x = TRUE)[!is.na(county)]
+	q <- quantile(data[, unique(get(var))], seq(0.2, 0.8, 0.2), na.rm = TRUE)
+	ggplot(data, aes(x, y, group = group)) +
+		{if (v1 == FALSE) geom_polygon(aes(fill = findInterval(get(var), q)))} +
+		{if (v1 == TRUE) geom_polygon_interactive(aes(fill = findInterval(get(var), q), tooltip = sprintf(formats, state, get(var))))} +
+		geom_polygon(data=coord[fips < 1001], fill = NA, color = "black") +
+		{if (v2 == "m50") scale_fill_distiller(palette="RdYlBu", direction=1, name="", na.value="white", labels=RenameLabels(q, 0))} +
+		{if (v2 != "m50") scale_fill_distiller(palette="RdYlBu", direction=1, name="", na.value="white", labels=RenameLabels(q, 0, TRUE))} +
+		ggtitle(GenerateDLTitle(v1, v2, v3)) +
+		ggthemes::theme_map() + my_theme()
+}
+
+#-----------------------------------------------------------------------------
+# Plot Apple mobility
+#-----------------------------------------------------------------------------
+plot_moby_appl <- function(moby.appl, v1){
+	data <- moby.appl[transportation_type == tolower(v1)]
+	ggplot(data, aes(x = date, y = traf)) +
+		geom_line(col = "blue", size = 1) +
+		geom_hline(yintercept = 100) +
 		scale_x_date(breaks = "1 week") +
-		labs(y = "Case growth (%)", x = "", color = "") + 
-		scale_color_manual(values = c("blue", "red")) +
+		scale_y_continuous(limits = c(0, 200), breaks = seq(0, 200, 50)) +
+		labs(y = "", x = "", color = "") + 
 		theme_classic() +		
-		ggtitle(paste("Changes in traffic volume and growth of cases: ", unique(data$state), sep = "")) +
-		theme(plot.title = element_text(size = 18, hjust = 0.5, family = "Times"), 
-					legend.position = c(0.8, 0.8), 
-					legend.title=element_text(size=14,family="Times"),
-					legend.text=element_text(size=14,vjust=0.5,family="Times"),
-					axis.text.x=element_text(size=14,family="Times",angle=45,hjust=1),
+		ggtitle(paste("Apple's Mobility in ", v1, " (2020-01-13=100)", sep = "")) + 
+		my_theme() + 
+		theme(axis.text.x=element_text(size=14,family="Times",angle=45,hjust=1),
 					axis.text.y=element_text(size=14,family="Times",hjust=1),
-					axis.title=element_text(size=14,family="Times")) 
+					axis.title =element_text(size=14,family="Times"))
 }
 
-# plot Apple mobility
-plot_moby_appl <- function(data){
-	ggplot(data, aes(x = date)) +
-		geom_line(aes(y = case_growth, color = "Case growth (%)"), size=1) +
-		geom_line(aes(y = traf * 1 - 50, color = "Traffic decline (%)"), size=1) +
-		scale_y_continuous(
-			sec.axis = sec_axis( ~ . / 1 + 50, name = "Traffic decline (%)")
-		) +
+#-----------------------------------------------------------------------------
+# Plot MS2 mobility
+#-----------------------------------------------------------------------------
+plot_moby_ms2 <- function(moby.ms2, v1){
+	data <- moby.ms2[state == v1]
+	ggplot(data, aes(x = date, y = traf+100)) +
+		geom_line(col = "red", size = 1) +
+		geom_line(data=moby.ms2[state == "National"], col = "blue", size = 1) +
+		geom_hline(yintercept = 100) +
 		scale_x_date(breaks = "1 week") +
-		labs(y = "Case growth (%)", x = "", color = "") + 
-		scale_color_manual(values = c("blue", "red")) +
+		scale_y_continuous(limits = c(0, 150), breaks = seq(0, 150, 25)) +
+		labs(y = "", x = "", color = "") + 
 		theme_classic() +		
-		ggtitle(paste("Changes in traffic volume and growth of cases: ", unique(data$transportation_type), sep = "")) +
-		theme(plot.title = element_text(size = 18, hjust = 0.5, family = "Times"), 
-					legend.position = c(0.8, 0.8), 
-					legend.title=element_text(size=14,family="Times"),
-					legend.text=element_text(size=14,vjust=0.5,family="Times"),
-					axis.text.x=element_text(size=14,family="Times",angle=45,hjust=1),
+		ggtitle(paste(paste("MS2's Mobility in ", v1, " (red) Compared to National Average (blue)", sep = ""),
+									"(the same day of week in the same month of last year = 100)", sep = "\n")) +
+		my_theme() + 
+		theme(axis.text.x=element_text(size=14,family="Times",angle=45,hjust=1),
 					axis.text.y=element_text(size=14,family="Times",hjust=1),
-					axis.title=element_text(size=14,family="Times")) 
+					axis.title =element_text(size=14,family="Times"))
 }
-

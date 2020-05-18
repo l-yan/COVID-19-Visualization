@@ -1,219 +1,232 @@
-# ------------------------------------------------------------------------------
-# load packages
-# ------------------------------------------------------------------------------
-pkgs <- list("data.table", "ggplot2", "ggthemes", "ggiraph", "shiny", "shinythemes", "usmap", "curl")
-lapply(pkgs, require, character.only = TRUE)
-my_theme <- theme(plot.title = element_text(size = 18, hjust = 0.5, family = "Times"), 
-									legend.position = "right", 
-									legend.title = element_text(size = 14, family = "Times"),
-									legend.text = element_text(size = 14,vjust = 0.5, family = "Times"))
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Preface
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+library(DT)
+library(data.table)
+library(ggplot2)
+library(ggthemes)
+library(ggiraph)
+library(rvest)
+library(shiny)
+library(shinythemes)
+library(stringi)
+library(usmap)
+library(curl)
 source("R/functions.R")
 source("R/functions-shiny.R")
 
-#-------------------------------------------------------------------------------
-# download/update data ---------------------------------------------------------
-#-------------------------------------------------------------------------------
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Download/update data
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 Data_Update()
 
-#-------------------------------------------------------------------------------
-# process data -----------------------------------------------------------------
-#-------------------------------------------------------------------------------
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Process datasets and extract them into workspace 
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 list2env(Data_Process(), envir = .GlobalEnv)
 
-#-------------------------------------------------------------------------------
-# define UI --------------------------------------------------------------------
-#-------------------------------------------------------------------------------
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Define UI 
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 ui <- fluidPage(
+	
+	# make title bigger
+	list(tags$style(HTML("
+      .navbar-default .navbar-brand {font-size: 24px;} 
+  "))),
+	
+	# specify web name and theme
 	navbarPage("COVID-19 and Mobility", theme = shinytheme("journal"),
-		
-		#---------------------------------------------------------------------------
-		# plot COVID-19 cases and deaths
-		tabPanel("COVID-19 Cases", fluid=TRUE,
-			sidebarLayout(
-				sidebarPanel(width = 3,
-						radioButtons(inputId = "show_case_level",
-												 label = "Select state/county:",
-												 choices = c("state", "county"),
-												 selected = "state"),
-						radioButtons(inputId = "show_case_content",
-												 label = "Select cases/deaths:",
-												 choices = c("cases", "deaths"),
-												 selected = "cases"),
-						radioButtons(inputId = "show_case_change",
-												 label = "Display changes in cases/deaths over the past:",
-												 choices = c("1 week", "2 weeks", "3 weeks","4 weeks"),
-												 selected = "1 week"),
-					div(style = "text-align:left", 
-							p("Data are as of ", span(max(case.state$date), style = "color:blue"), " from The New York Times's",
-								a("COVID-19 data repository.", href="https://github.com/nytimes/covid-19-data"))
-					)
-				),
-				mainPanel(width = 9, girafeOutput("case"))
-			)
-		),
-		
-		#---------------------------------------------------------------------------
-		# plot Google mobility
-		tabPanel("Google Mobility", fluid=TRUE,
-			sidebarLayout(
-				sidebarPanel(width = 3,
-					radioButtons(inputId = "show_moby_level",
-											 label = "Select state/county:",
-											 choices = c("state", "county"),
-											 selected = "state"),
-					radioButtons(inputId = "show_moby_type",
-											 label = "Select a category:",
-											 choices = c("Grocery and Pharmacy","Parks","Residential", 
-											 						"Retail and Recreation","Transit","Workplaces"),
-											 selected = "Grocery and Pharmacy"),
-					dateInput(inputId = "show_moby_date",
-										label = "Display change in mobility on:",
-										value = max(moby.state$date),
-										min = min(moby.state$date),
-										max = max(moby.state$date)),
-					div(style = "text-align:left", 
-							p("Data are as of ", span(max(moby.state$date), style = "color:blue"), " from Google's",
-								a("Community Mobility Reports.", href="https://www.google.com/covid19/mobility/"))
-					)
-				),
-				mainPanel(width = 9, girafeOutput("moby_goog"))
-			)
-		),
-		
-		#---------------------------------------------------------------------------
-		# plot DL mobility
-		tabPanel("DL Mobility", fluid=TRUE,
-						 sidebarLayout(
-						 	sidebarPanel(width = 3,
-						 							 radioButtons(inputId = "moby_dl_level",
-						 							 						 label = "Select state/county:",
-						 							 						 choices = c("state", "county"),
-						 							 						 selected = "state"),
-						 							 radioButtons(inputId = "moby_dl_type",
-						 							 						 label = "Select a measure:",
-						 							 						 choices = c("median max-distance mobility", 
-						 							 						 						"change in median max-distance mobility"),
-						 							 						 selected = "median max-distance mobility"),
-						 							 helpText("Change in median is the percent of normal m50, with normal m50 defined during 2020-02-17 to 2020-03-07."),
-						 							 dateInput(inputId = "moby_dl_date",
-						 							 					label = "Select a date:",
-						 							 					value = max(moby.dl$date),
-						 							 					min = min(moby.dl$date),
-						 							 					max = max(moby.dl$date)),
-						 							 div(style = "text-align:left", 
-						 							 		p("Data are as of ", span(max(moby.dl$date), style = "color:blue"), " from Descartes Labs'",
-						 							 			a("mobility statistics.", href="https://github.com/descarteslabs/DL-COVID-19"))
-						 							 )
-						 	),
-						 	mainPanel(width = 9, girafeOutput("moby_dl"))
+						 
+						 #---------------------------------------------------------------------------
+						 # COVID-19 data
+						 #---------------------------------------------------------------------------
+						 tabPanel("COVID-19 Cases", fluid=TRUE,
+						 				 sidebarLayout(
+						 				 	sidebarPanel(
+						 				 		radioButtons(inputId = "case_state_or_county",
+						 				 								 label = "Select a geographic level:",
+						 				 								 choices = c("State", "County"),
+						 				 								 inline = TRUE),
+						 				 		radioButtons(inputId = "case_case_or_death",
+						 				 								 label = "Show cases or deaths:",
+						 				 								 choices = c("Cases", "Deaths"),
+						 				 								 inline = TRUE),
+						 				 		radioButtons(inputId = "case_level_or_change",
+						 				 								 label = "Show new cases/deaths in levels or changes:",
+						 				 								 choices = c("New cases/deaths", "Weekly changes in new cases/deaths")),
+						 				 		selectInput( inputId = "case_period",
+						 				 								 label = "Choose a week:",
+						 				 								 choices = GenerateWeekInterval(unique(case$date))),
+						 				 		checkboxInput(inputId = "case_per_capita_or_not",
+						 				 									label = "Expressed per 1M people?"),
+						 				 		div(style = "text-align:left", 
+						 				 				p("Data are as of ", span(max(case$date), style = "color:blue"), " from The New York Times's",
+						 				 					a("COVID-19 data repository.", href="https://github.com/nytimes/covid-19-data"))
+						 				 		)
+						 				 	),
+						 				 	mainPanel(girafeOutput("case_fig1"))
+						 				 )
+						 ),
+						 
+						 #---------------------------------------------------------------------------
+						 # Mobility data: Google
+						 #---------------------------------------------------------------------------
+						 tabPanel("Google Mobility", fluid=TRUE,
+						 				 sidebarLayout(
+						 				 	sidebarPanel(
+						 				 		p("Google's mobility measures the change in visits to places compared to the baseline, 
+						where baseline is the median value, for the corresponding day of the week, during Jan 3–Feb 6, 2020."),
+						 				 		radioButtons(inputId = "moby_goog_state_or_county",
+						 				 								 label = "Select a geographic level:",
+						 				 								 choices = c("State", "County"),
+						 				 								 inline = TRUE),
+						 				 		radioButtons(inputId = "moby_goog_type",
+						 				 								 label = "Select a place type:",
+						 				 								 choices = c("Grocery and Pharmacy","Parks","Residential",
+						 				 								 						"Retail and Recreation","Transit","Workplaces")),
+						 				 		radioButtons(inputId = "moby_goog_level_or_change",
+						 				 								 label = "Show mobility in levels or changes:",
+						 				 								 choices = c("Levels", "Weekly changes")),
+						 				 		selectInput( inputId = "moby_goog_date",
+						 				 								 label = "Choose a date:",
+						 				 								 choices = seq(max(moby.goog$date), by=-7, length.out = 7)),
+						 				 		div(style = "text-align:left",
+						 				 				p("Data are as of ", span(max(moby.goog$date), style = "color:blue"), " from Google's",
+						 				 					a("Community Mobility Reports.", href="https://www.google.com/covid19/mobility/"))
+						 				 		)
+						 				 	),
+						 				 	mainPanel(girafeOutput("moby_goog_fig1"))
+						 				 )
+						 ),
+						 
+						 #---------------------------------------------------------------------------
+						 # Mobility data: Descartes Labs (DL)
+						 #---------------------------------------------------------------------------
+						 tabPanel("DL Mobility", fluid=TRUE,
+						 				 sidebarLayout(
+						 				 	sidebarPanel(
+						 				 		p("Descartes Labs' (DL) mobility measures the distance a typical member of a given population moves in a day. 
+						See technical details", a("here.", href = "https://www.descarteslabs.com/wp-content/uploads/2020/03/mobility-v097.pdf")),
+						 				 		radioButtons(inputId = "moby_dl_state_or_county",
+						 				 								 label = "Select a geographic level:",
+						 				 								 choices = c("State", "County"),
+						 				 								 inline = TRUE),
+						 				 		radioButtons(inputId = "moby_dl_level_or_change",
+						 				 								 label = "Select a measure:",
+						 				 								 choices = c("m50", "m50_index"),
+						 				 								 inline = TRUE),
+						 				 		helpText("m50 is the median max-distance mobility"),
+						 				 		helpText("m50_index is the percent of normal m50, with normal m50 defined during 2020-02-17 to 2020-03-07"),
+						 				 		dateInput(inputId = "moby_dl_date",
+						 				 							label = "Select a date:",
+						 				 							value = max(moby.dl$date),
+						 				 							min = min(moby.dl$date),
+						 				 							max = max(moby.dl$date)),
+						 				 		div(style = "text-align:left",
+						 				 				p("Data are as of ", span(max(moby.dl$date), style = "color:blue"), " from Descartes Labs'",
+						 				 					a("mobility statistics.", href="https://github.com/descarteslabs/DL-COVID-19"))
+						 				 		)
+						 				 	),
+						 				 	mainPanel(girafeOutput("moby_dl_fig1"))
+						 				 )
+						 ),
+						 
+						 #---------------------------------------------------------------------------
+						 # Mobility data: Apple
+						 #---------------------------------------------------------------------------
+						 tabPanel("Apple Mobility", fluid=TRUE,
+						 				 sidebarLayout(
+						 				 	sidebarPanel(
+						 				 		p("Apple's mobility measures the daily change in requests for directions by transportation type for all available countries/regions, sub-regions, and cities."),
+						 				 		selectInput(inputId = "moby_appl_type",
+						 				 								label = "Select a transportation type:",
+						 				 								choices = c("Driving", "Transit", "Walking")),
+						 				 		div(style = "text-align:left",
+						 				 				p("Data are as of ", span(max(moby.appl$date), style = "color:blue"), " from Apple's",
+						 				 					a("Mobility Trends Reports.", href="https://www.apple.com/covid19/mobility"))
+						 				 		)
+						 				 	),
+						 				 	mainPanel(plotOutput("moby_appl_fig1"))
+						 				 )
+						 ),
+						 
+						 #---------------------------------------------------------------------------
+						 # Mobility data: MS2
+						 #---------------------------------------------------------------------------
+						 tabPanel("MS2 Mobility", fluid=TRUE,
+						 				 sidebarLayout(
+						 				 	sidebarPanel(
+						 				 		p("MS2's mobility measures the daily change in traffic volumes as compared to the same day of week in the same month of last year. 
+						The metric is based on 24/7/365 data from traffic sensors and smart traffic signals installed by many road agencies."),
+						 				 		selectInput(inputId = "moby_ms2_state",
+						 				 								label = "Select a state:",
+						 				 								choices = unique(moby.ms2$state)[-1]),
+						 				 		div(style = "text-align:left",
+						 				 				p("Data are as of ", span(max(moby.ms2$date), style = "color:blue"), " from ",
+						 				 					a("MS2's Traffic Dashborad.", href="https://www.ms2soft.com/traffic-dashboard/"))
+						 				 		)
+						 				 	),
+						 				 	mainPanel(plotOutput("moby_ms2_fig1"))
+						 				 )
 						 )
-		),
-		
-		#---------------------------------------------------------------------------
-		# plot Apple mobility
-		tabPanel("Apple Mobility", fluid=TRUE,
-						 sidebarLayout(
-						 	sidebarPanel(width = 3,
-						 							 selectInput(inputId = "moby_appl_type", 
-						 							 						label = "Select a transportation type:", 
-						 							 						choices = unique(moby.appl$transportation_type),
-						 							 						selected = "driving"),
-						 							 div(style = "text-align:left", 
-						 							 		p("Data are as of ", span(max(moby.appl$date), style = "color:blue"), " from Apple's",
-						 							 			a("Mobility Trends Reports.", href="https://www.apple.com/covid19/mobility"))
-						 							 )
-						 	),
-						 	mainPanel(width = 9, plotOutput("moby_appl"))
-						 )
-		),
-		
-		#---------------------------------------------------------------------------
-		# plot traffic volume
-		tabPanel("Traffic Volume", fluid=TRUE,
-						 sidebarLayout(
-						 	sidebarPanel(width = 3,
-						 		selectInput(inputId = "traf_state", 
-						 								label = "Select a state:", 
-						 								choices = unique(traf.state$state),
-						 								selected = "National"),
-					 			div(style = "text-align:left", 
-					 					p("Data are as of ", span(max(traf.state$date), style = "color:blue"), " from ",
-					 						a("MS2's Traffic Dashborad.", href="https://www.ms2soft.com/traffic-dashboard/"))
-					 			)
-						 	),
-						 	mainPanel(width = 9, plotOutput("traf"))
-						 )
-		)
 	)
 )
 
-#-------------------------------------------------------------------------------
-# define server ----------------------------------------------------------------
-#-------------------------------------------------------------------------------
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Define server 
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 server <- function(input, output){
 	
 	#-----------------------------------------------------------------------------
-	# plot COVID-19 cases 
-	output$case <- renderGirafe({
-		var <- paste(input$show_case_content, "_w", substr(input$show_case_change, 1, 1), sep = "")
-		if (input$show_case_level=="state"){
-			data <- merge(coord.state, case.state[date==max(date)], by="state", all.x=TRUE)
-		}else{
-			data <- merge(coord.cnty, case.cnty[date==max(date)], by="fips", all.x=TRUE)
-		}
-		ggiraph(code = print(plot_case(var, data, coord.state)), width_svg = 9, height_svg = 6)
+	# COVID-19 data
+	#-----------------------------------------------------------------------------
+	output$case_fig1 <- renderGirafe({
+		v1 <- input$case_state_or_county == "State"
+		v2 <- tolower(input$case_case_or_death)
+		v3 <- ifelse(input$case_level_or_change == "New cases/deaths", "_new", "_new_change")
+		v4 <- as.Date(substr(input$case_period, 15, 24))
+		v5 <- ifelse(input$case_per_capita_or_not, "_a", "")
+		ggiraph(code = print(plot_case(coord, case, v1, v2, v3, v4, v5)), width_svg = 9, height_svg = 6)
 	})
 	
 	#-----------------------------------------------------------------------------
-	# plot Google mobility 
-	output$moby_goog <- renderGirafe({
-		if (input$show_moby_level=="state"){
-			data <- merge(coord.state, moby.state[date==input$show_moby_date], by="state", all.x=TRUE)
-		}else{
-			data <- merge(coord.cnty, moby.cnty[date==input$show_moby_date], by="id", all.x=TRUE)
-		}
-		ggiraph(code = print(plot_moby(input$show_moby_type, data, coord.state)), width_svg = 9, height_svg = 6)
+	# Mobility data: Google
+	#-----------------------------------------------------------------------------
+	output$moby_goog_fig1 <- renderGirafe({
+		v1 <- input$moby_goog_state_or_county == "State"
+		v2 <- input$moby_goog_type
+		v3 <- ifelse(input$moby_goog_level_or_change == "Levels", "", "_change")
+		v4 <- as.Date(input$moby_goog_date)
+		ggiraph(code = print(plot_moby_goog(coord, moby.goog, v1, v2, v3, v4)), width_svg = 9, height_svg = 6)
 	})
 	
 	#-----------------------------------------------------------------------------
-	# plot DL mobility 
-	output$moby_dl <- renderGirafe({
-		if (input$moby_dl_level=="state"){
-			data <- merge(coord.state, moby.dl[county=="" & date==input$moby_dl_date], by="state", all.x=TRUE)
-			data[, county := NULL]
-		}else{
-			data <- merge(coord.cnty, moby.dl[county!="" & date==input$moby_dl_date], by="fips", all.x=TRUE)
-		}
-		ggiraph(code = print(plot_moby_dl(input$moby_dl_type, data, coord.state)), width_svg = 9, height_svg = 6)
+	# Mobility data: DL
+	#-----------------------------------------------------------------------------
+	output$moby_dl_fig1 <- renderGirafe({
+		v1 <- input$moby_dl_state_or_county == "State"
+		v2 <- input$moby_dl_level_or_change
+		v3 <- input$moby_dl_date
+		ggiraph(code = print(plot_moby_dl(coord, moby.dl, v1, v2, v3)), width_svg = 9, height_svg = 6)
 	})
 	
 	#-----------------------------------------------------------------------------
-	# plot Apple mobility 
-	output$moby_appl <- renderPlot({
-		case.sum <- case.state[state %in% unique(coord.state$state), sum(cases), keyby=date]
-		case.sum[, case_growth := c(NA, 100*diff(log(V1)))]
-		case.sum[, date := as.Date(date)]
-		data <- merge(moby.appl[transportation_type==input$moby_appl_type], case.sum, by = "date", all.x = TRUE)
-		plot_moby_appl(data)
+	# Mobility data: Apple
+	#-----------------------------------------------------------------------------
+	output$moby_appl_fig1 <- renderPlot({
+		v1 <- input$moby_appl_type
+		plot_moby_appl(moby.appl, v1)
 	}, width = 720, height = 480)
 	
 	#-----------------------------------------------------------------------------
-	# plot traffic volume 
-	output$traf <- renderPlot({
-		if (input$traf_state == "National"){
-			case.sum <- case.state[state %in% unique(coord.state$state), sum(cases), keyby=date]
-		}else{
-			case.sum <- case.state[state == input$traf_state, sum(cases), keyby=date]
-		}
-		case.sum[, case_growth := c(NA, 100*diff(log(V1)))]
-		case.sum[, date := as.Date(date)]
-		data <- merge(traf.state[state==input$traf_state], case.sum, by = "date", all.x = TRUE)
-		plot_traf(data)
+	# mobility data: MS2
+	#-----------------------------------------------------------------------------
+	output$moby_ms2_fig1 <- renderPlot({
+		v1 <- input$moby_ms2_state
+		plot_moby_ms2(moby.ms2, v1)
 	}, width = 720, height = 480)
-
+	
 }
 
-#-------------------------------------------------------------------------------
-# run app ----------------------------------------------------------------------
-#-------------------------------------------------------------------------------
 shinyApp(ui, server)

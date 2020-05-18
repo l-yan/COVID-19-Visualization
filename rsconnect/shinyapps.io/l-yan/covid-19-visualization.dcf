@@ -1,0 +1,10 @@
+name: covid-19-visualization
+title:
+username:
+account: l-yan
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2319970
+bundleId: 3163219
+url: https://l-yan.shinyapps.io/covid-19-visualization/
+when: 1589830642.71702
