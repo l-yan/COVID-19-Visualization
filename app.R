@@ -65,7 +65,8 @@ ui <- fluidPage(
 						 				 					a("COVID-19 data repository.", href="https://github.com/nytimes/covid-19-data"))
 						 				 		)
 						 				 	),
-						 				 	mainPanel(girafeOutput("case_fig1"))
+						 				 	mainPanel(girafeOutput("case_fig1"),
+						 				 						DT::dataTableOutput("case_tab1"))
 						 				 )
 						 ),
 						 
@@ -96,7 +97,8 @@ ui <- fluidPage(
 						 				 					a("Community Mobility Reports.", href="https://www.google.com/covid19/mobility/"))
 						 				 		)
 						 				 	),
-						 				 	mainPanel(girafeOutput("moby_goog_fig1"))
+						 				 	mainPanel(girafeOutput("moby_goog_fig1")
+						 				 						)
 						 				 )
 						 ),
 						 
@@ -188,6 +190,29 @@ server <- function(input, output){
 		v4 <- as.Date(substr(input$case_period, 15, 24))
 		v5 <- ifelse(input$case_per_capita_or_not, "_a", "")
 		ggiraph(code = print(plot_case(coord, case, v1, v2, v3, v4, v5)), width_svg = 9, height_svg = 6)
+	})
+	
+	output$case_tab1 <- renderDataTable({
+		v1 <- ifelse(input$case_state_or_county == "State", TRUE, FALSE)
+		v4 <- as.Date(substr(input$case_period, 15, 24))
+		var <- c("cases_new_percent", "cases_new_change", "cases_new", "cases")
+		cnames <- c("Percentage Change in New Cases", "Change in New Cases", "New Cases", "Total Cases")
+		if (v1 == TRUE){
+			var <- c("state", var)
+			cnames <- c("State", cnames)
+		}else{
+			var <- c("state", "county", var)
+			cnames <- c("State", "County", cnames)
+		}
+		data <- case[county %in% "State" == v1 & date==v4, mget(var)]
+		data[, cases_new_percent := cases_new_percent / 100]
+		setorder(data, -cases_new_percent)
+		title <- paste("Spots with the Most Increase in New Cases from ", input$case_period, sep = "")
+		datatable(data[!is.na(cases_new_percent)], caption = htmltools::tags$caption(title, style = "color:red"),
+							colnames = cnames,
+							options = list(autoWidth = TRUE, columnDefs = list(list(className = 'dt-center', targets = 1:(ncol(data)-4)), list(width = '200px', targets = (ncol(data)-3):ncol(data))))) %>%
+			formatPercentage("cases_new_percent", digits = 1) %>%
+			formatRound(c("cases_new_change", "cases_new", "cases"), digits = 0)
 	})
 	
 	#-----------------------------------------------------------------------------
